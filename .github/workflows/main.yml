@@ -1,0 +1,67 @@
+name: Python Bot Workflow
+on:
+  schedule:
+    # Run every 6 hours at minute 0 (e.g., 00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:  # Allow manual trigger
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours max (free tier limit)
+    
+    steps:
+      # Step 1: Checkout repository code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      # Step 2: Update system packages
+      - name: Update System Packages
+        run: sudo apt-get update -y
+        
+      # Step 3: Set up Python with cache
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+          
+      # Step 4: Install dependencies
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          chmod +x *
+          
+      # Step 5: Run bot with timeout (350 minutes = 5h50m)
+      - name: Run Python Bot
+        run: |
+          echo "Starting bot at $(date)"
+          
+          # Run bot for 350 minutes (5 hours 50 minutes)
+          timeout 350m python3 bot.py &
+          BOT_PID=$!
+          
+          # Wait for the timeout to complete
+          wait $BOT_PID
+          EXIT_CODE=$?
+          
+          if [ $EXIT_CODE -eq 124 ]; then
+            echo "Bot stopped after 350 minutes (timeout)"
+          else
+            echo "Bot exited with code $EXIT_CODE"
+          fi
+          
+          echo "Bot stopped at $(date)"
+          
+      # Step 6: Notify on Failure
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "Bot workflow failed at $(date)"
+          # Add notification logic here if needed
